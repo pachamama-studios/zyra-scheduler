@@ -75,9 +75,10 @@ jobs:
           # Use the robust POST /search endpoint
           STAC_SEARCH_URL = "https://stac.dataspace.copernicus.eu/v1/search"
 
-          # Search a 'safer' window: 60 days ago to 30 days ago.
-          end = datetime.utcnow() - timedelta(days=30)
-          start = datetime.utcnow() - timedelta(days=60)
+          # Search a 'safer' window: 40 days ago to 10 days ago.
+          # This avoids the absolute newest data and the 'cool' 30-60 day window.
+          end = datetime.utcnow() - timedelta(days=10)
+          start = datetime.utcnow() - timedelta(days=40)
           datetime_range = f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
 
           # Widen the bounding box
@@ -85,7 +86,10 @@ jobs:
           
           # Build the search payload for the POST request
           search_payload = {
-              "collections": ["Sentinel-2"], # Case-sensitive collection ID
+              # --- CHANGE HERE ---
+              # Query the specific L2A (Level-2A) collection, not the parent.
+              "collections": ["Sentinel-2-L2A"], 
+              # -----------------
               "bbox": bbox,
               "datetime": datetime_range,
               "limit": 5,
