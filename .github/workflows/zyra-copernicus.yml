@@ -1,0 +1,47 @@
+name: Zyra Copernicus Acquire
+
+on:
+  workflow_dispatch:
+    inputs:
+      DATASET_NAME:
+        description: Dataset name (e.g., copernicus)
+        required: true
+        type: string
+
+env:
+  ZYRA_SCHEDULER_IMAGE: ghcr.io/noaa-gsl/zyra-scheduler:latest
+
+jobs:
+  acquire-copernicus:
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ env.ZYRA_SCHEDULER_IMAGE }}
+      options: >-
+        --entrypoint ""
+        --user 0
+    env:
+      COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
+      COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Copernicus connector (temporary)
+        run: pip install 'zyra[datatransfer] copernicus-api-client'
+
+      - name: Acquire imagery from Copernicus
+        run: |
+          zyra acquire copernicus \
+            --dataset "Sentinel-2" \
+            --bbox "-120,35,-118,37" \
+            --start-date "2025-11-01" \
+            --end-date "2025-11-07" \
+            --output-dir "_work/images/${DATASET_NAME}" \
+            --username "${COPERNICUS_USERNAME}" \
+            --password "${COPERNICUS_PASSWORD}"
+
+      - name: Upload imagery artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: copernicus-${{ inputs.DATASET_NAME }}
+          path: _work/images/${{ inputs.DATASET_NAME }}
