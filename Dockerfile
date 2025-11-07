@@ -29,6 +29,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
 
 # Ensure zyra S3 backend dependencies are present for CLI usage
 RUN python3 -m pip install --no-cache-dir boto3
+RUN python3 -m pip install --no-cache-dir 'zyra[datatransfer]'
 
 WORKDIR /app
 
