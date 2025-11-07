@@ -88,7 +88,11 @@ jobs:
           
           # Build the search payload for the POST request
           search_payload = {
-              "collections": ["Sentinel-2-L2A"], 
+              # --- CHANGE HERE ---
+              # Search for *both* L1C and L2A collections.
+              # This is the widest possible net we can cast.
+              "collections": ["Sentinel-2-L1C", "Sentinel-2-L2A"], 
+              # -----------------
               "bbox": bbox,
               "datetime": datetime_range,
               "limit": 5,
