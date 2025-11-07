@@ -26,48 +26,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Copernicus connector (temporary)
-        run: pip install 'zyra[datatransfer]' sentinelsat
-
-      - name: Acquire imagery from Copernicus (API)
+      - name: Install Copernicus Dataspace client
+        run: pip install --no-cache-dir 'zyra[datatransfer]' copernicusdataspace
+      
+      - name: Acquire imagery from Copernicus Dataspace (API)
         run: |
           python3 <<'PYCODE'
-          from sentinelsat import SentinelAPI
+          from copernicusdataspace import CDSAPI
           from datetime import datetime, timedelta
           import os
       
-          api = SentinelAPI(
-              os.environ["COPERNICUS_USERNAME"],
-              os.environ["COPERNICUS_PASSWORD"],
-              "https://catalogue.dataspace.copernicus.eu"
+          api = CDSAPI(
+              username=os.environ["COPERNICUS_USERNAME"],
+              password=os.environ["COPERNICUS_PASSWORD"]
           )
-
       
-          # Use datetime objects
           end = datetime.utcnow()
           start = end - timedelta(hours=8)
       
-          footprint = 'POLYGON((-120 35, -118 35, -118 37, -120 37, -120 35))'
-      
-          products = api.query(
-              area=footprint,
-              date=(start, end),
-              platformname="Sentinel-1",
-              producttype="SLC"
+          products = api.search(
+              platform="Sentinel-1",
+              productType="SLC",
+              startDate=start,
+              completionDate=end,
+              geometry={
+                  "type": "Polygon",
+                  "coordinates": [[[-120, 35], [-118, 35], [-118, 37], [-120, 37], [-120, 35]]]
+              },
+              limit=3
           )
+      
+          print(f"Found {len(products)} products")
       
           os.makedirs("_work/images/${DATASET_NAME}", exist_ok=True)
       
-          if products:
-              uuid = next(iter(products))
-              print(f"Downloading product {uuid} ...")
-              api.download(uuid, directory_path=f"_work/images/${DATASET_NAME}")
-          else:
-              print("No products found for given query.")
+          for p in products:
+              print(f"Downloading {p['title']} ...")
+              api.download(p["id"], f"_work/images/${DATASET_NAME}")
           PYCODE
         env:
           COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
           COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
+
 
 
 
