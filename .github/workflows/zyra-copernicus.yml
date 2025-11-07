@@ -29,60 +29,81 @@ jobs:
       - name: Install dependencies
         run: pip install --no-cache-dir 'zyra[datatransfer]' requests
       
-      - name: Acquire imagery via CDSE STAC API
+      - name: Acquire imagery via Copernicus Data Space (OAuth2 + STAC)
         run: |
           python3 <<'PYCODE'
           import os, requests, json
           from datetime import datetime, timedelta
       
-          USER = os.environ["COPERNICUS_USERNAME"]
-          PASS = os.environ["COPERNICUS_PASSWORD"]
+          # Load OAuth credentials from secrets
+          CLIENT_ID = os.environ["CDSE_CLIENT_ID"]
+          CLIENT_SECRET = os.environ["CDSE_CLIENT_SECRET"]
       
-          # Use STAC API endpoint
-          base = "https://catalogue.dataspace.copernicus.eu/stac/collections/SENTINEL-1/items"
-          
-          # Time window
+          # OAuth2 token endpoint
+          TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+      
+          # Step 1: Request access token
+          print("Requesting access token...")
+          token_resp = requests.post(
+              TOKEN_URL,
+              data={
+                  "grant_type": "client_credentials",
+                  "client_id": CLIENT_ID,
+                  "client_secret": CLIENT_SECRET,
+              },
+              timeout=60,
+          )
+          token_resp.raise_for_status()
+          token = token_resp.json()["access_token"]
+          headers = {"Authorization": f"Bearer {token}"}
+      
+          # Step 2: Query STAC API for Sentinel data
+          STAC_URL = "https://catalogue.dataspace.copernicus.eu/stac/collections/SENTINEL-1/items"
+          # For Sentinel-2, use SENTINEL-2 instead of SENTINEL-1
+      
           end = datetime.utcnow()
           start = end - timedelta(hours=8)
-          dt = f"{start.isoformat()}Z/{end.isoformat()}Z"
-          
-          # Example bounding‐box (xmin,ymin,xmax,ymax)
           bbox = [-120.0, 35.0, -118.0, 37.0]
       
           params = {
               "bbox": ",".join(map(str, bbox)),
-              "datetime": dt,
-              "limit": "3"
+              "datetime": f"{start.isoformat()}Z/{end.isoformat()}Z",
+              "limit": 3
           }
       
-          resp = requests.get(base, auth=(USER, PASS), params=params, timeout=120)
+          print("Querying STAC endpoint...")
+          resp = requests.get(STAC_URL, headers=headers, params=params, timeout=120)
+          if resp.status_code == 403:
+              print("❌ Forbidden: Check that your client ID/secret has catalogue access.")
+              print(resp.text)
+              exit(1)
           resp.raise_for_status()
           data = resp.json()
       
-          items = data.get("features", [])
-          print(f"Found {len(items)} items")
-          os.makedirs(f"_work/images/{os.environ['DATASET_NAME']}", exist_ok=True)
+          features = data.get("features", [])
+          print(f"Found {len(features)} results")
       
-          for it in items:
-              asset = it["assets"].get("data") or next(iter(it["assets"].values()))
+          outdir = f"_work/images/{os.environ.get('DATASET_NAME', 'copernicus')}"
+          os.makedirs(outdir, exist_ok=True)
+      
+          for f in features:
+              title = f["id"]
+              # Find an asset with downloadable data (some STAC items have multiple assets)
+              asset = next(iter(f["assets"].values()))
               url = asset["href"]
-              name = it["id"] + ".zip"
-              print(f"Downloading {name}")
-              with requests.get(url, auth=(USER, PASS), stream=True) as r2:
-                  r2.raise_for_status()
-                  with open(f"_work/images/{os.environ['DATASET_NAME']}/{name}", "wb") as f:
-                      for chunk in r2.iter_content(chunk_size=8192):
-                          f.write(chunk)
+              print(f"Downloading {title} → {url}")
+              r2 = requests.get(url, headers=headers, stream=True, timeout=300)
+              r2.raise_for_status()
+              with open(os.path.join(outdir, f"{title}.zip"), "wb") as fp:
+                  for chunk in r2.iter_content(chunk_size=8192):
+                      fp.write(chunk)
+      
+          print("✅ Acquisition complete.")
           PYCODE
         env:
-          COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
-          COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
-          DATASET_NAME: ${{ inputs.DATASET_NAME }}
-
-
-
-
-
+          CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
+          CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
+          DATASET_NAME: ${{ inputs.DATASET_NAME || 'copernicus' }}
 
       - name: Upload imagery artifacts
         uses: actions/upload-artifact@v4
