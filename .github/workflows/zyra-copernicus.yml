@@ -60,15 +60,15 @@ jobs:
           STAC_URL = "https://stac.dataspace.copernicus.eu/v1/collections/SENTINEL-2/items"
       
           # Last 30 days, area over northern Italy (guaranteed data)
-          end = datetime.utcnow()
-          start = end - timedelta(days=30)
+          end = datetime.utcnow() - timedelta(days=30)
+          start = datetime.utcnow() - timedelta(days=60)
           datetime_range = f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
       
-          bbox = [11.8, 45.2, 12.6, 45.8]  # Venice region
+          bbox = [9.0, 45.0, 13.0, 46.0]  # Broader Northern Italy region
           params = {
               "bbox": ",".join(map(str, bbox)),
               "datetime": datetime_range,
-              "limit": 5
+              "limit": 5  # Limit to 5 results for a quick test
           }
       
           print("Querying STAC endpoint...")
