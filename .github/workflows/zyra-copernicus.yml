@@ -75,14 +75,16 @@ jobs:
           # Use the robust POST /search endpoint
           STAC_SEARCH_URL = "https://stac.dataspace.copernicus.eu/v1/search"
 
-          # Search a 'safer' window: 40 days ago to 10 days ago.
-          # This avoids the absolute newest data and the 'cool' 30-60 day window.
+          # --- TIME WINDOW CHANGE ---
+          # Search a very wide window: the entire past year,
+          # ending 10 days ago to avoid any indexing lag.
           end = datetime.utcnow() - timedelta(days=10)
-          start = datetime.utcnow() - timedelta(days=40)
+          start = datetime.utcnow() - timedelta(days=375) # Approx 1 year + 10 days
           datetime_range = f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+          print(f"Searching 1-year window: {datetime_range}")
 
           # Widen the bounding box
-          bbox = [9.0, 45.0, 13.0, 46.0]  # Broader Northern Italy region
+          bbox = [9.0, 45.0, 25.0, 65.0]  # Broader Northern Italy region
           
           # Build the search payload for the POST request
           search_payload = {
