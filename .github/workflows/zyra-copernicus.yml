@@ -88,7 +88,16 @@ jobs:
               "collections": ["Sentinel-2"], # Case-sensitive collection ID
               "bbox": bbox,
               "datetime": datetime_range,
-              "limit": 5
+              "limit": 5,
+              # --- ADD THIS 'query' BLOCK ---
+              # Explicitly ask for images with less than 90% cloud cover.
+              # This is a common reason for "0 results" on optical sensors.
+              "query": {
+                  "eo:cloud_cover": {
+                      "lt": 90
+                  }
+              }
+              # -----------------------------
           }
 
           print(f"Querying STAC search endpoint: {STAC_SEARCH_URL}")
