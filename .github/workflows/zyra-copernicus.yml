@@ -29,18 +29,43 @@ jobs:
       - name: Install Copernicus connector (temporary)
         run: pip install 'zyra[datatransfer]' sentinelsat
 
-      - name: Acquire imagery from Copernicus (temporary)
+      - name: Acquire imagery from Copernicus (API)
         run: |
-          mkdir -p "_work/images/${DATASET_NAME}"
-          sentinelsat \
-            --user "${COPERNICUS_USERNAME}" \
-            --password "${COPERNICUS_PASSWORD}" \
-            --sentinel 2 \
-            --lonmin -120 --latmin 35 --lonmax -118 --latmax 37 \
-            --start "2025-11-01T00:00:00Z" \
-            --end "2025-11-07T23:59:59Z" \
-            --limit 5 \
-            --download "_work/images/${DATASET_NAME}"
+          python3 <<'PYCODE'
+          from sentinelsat import SentinelAPI
+          from datetime import datetime, timedelta
+          import os
+      
+          api = SentinelAPI(
+              os.environ["COPERNICUS_USERNAME"],
+              os.environ["COPERNICUS_PASSWORD"],
+              "https://apihub.copernicus.eu/apihub"
+          )
+      
+          start = (datetime.utcnow() - timedelta(hours=8)).isoformat()
+          end = datetime.utcnow().isoformat()
+          footprint = 'POLYGON((-120 35, -118 35, -118 37, -120 37, -120 35))'
+      
+          products = api.query(
+              area=footprint,
+              date=(start, end),
+              platformname="Sentinel-1",
+              producttype="SLC"
+          )
+      
+          os.makedirs("_work/images/${DATASET_NAME}", exist_ok=True)
+      
+          if products:
+              uuid = next(iter(products))
+              print(f"Downloading product {uuid} ...")
+              api.download(uuid, directory_path=f"_work/images/${DATASET_NAME}")
+          else:
+              print("No products found for given query.")
+          PYCODE
+        env:
+          COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
+          COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
+
 
       - name: Upload imagery artifacts
         uses: actions/upload-artifact@v4
