@@ -26,47 +26,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Copernicus Dataspace client
-        run: pip install --no-cache-dir 'zyra[datatransfer]' copernicusdataspace
+      - name: Install dependencies
+        run: pip install --no-cache-dir 'zyra[datatransfer]' requests
       
-      - name: Acquire imagery from Copernicus Dataspace (API)
+      - name: Acquire imagery from Copernicus Data Space (REST API)
         run: |
           python3 <<'PYCODE'
-          from copernicusdataspace import CDSAPI
+          import requests, os, json
           from datetime import datetime, timedelta
-          import os
       
-          api = CDSAPI(
-              username=os.environ["COPERNICUS_USERNAME"],
-              password=os.environ["COPERNICUS_PASSWORD"]
-          )
+          USER = os.environ["COPERNICUS_USERNAME"]
+          PASS = os.environ["COPERNICUS_PASSWORD"]
       
+          # CDSE search endpoint
+          API_URL = "https://catalogue.dataspace.copernicus.eu/resto/api/collections/Sentinel1/search.json"
+      
+          # Define time window
           end = datetime.utcnow()
           start = end - timedelta(hours=8)
       
-          products = api.search(
-              platform="Sentinel-1",
-              productType="SLC",
-              startDate=start,
-              completionDate=end,
-              geometry={
-                  "type": "Polygon",
-                  "coordinates": [[[-120, 35], [-118, 35], [-118, 37], [-120, 37], [-120, 35]]]
-              },
-              limit=3
-          )
+          params = {
+              "startDate": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "completionDate": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "productType": "SLC",
+              "geometry": "POLYGON((-120 35, -118 35, -118 37, -120 37, -120 35))",
+              "maxRecords": 3
+          }
       
-          print(f"Found {len(products)} products")
+          r = requests.get(API_URL, auth=(USER, PASS), params=params, timeout=120)
+          r.raise_for_status()
+          data = r.json()
       
           os.makedirs("_work/images/${DATASET_NAME}", exist_ok=True)
+          print(f"Found {len(data.get('features', []))} products")
       
-          for p in products:
-              print(f"Downloading {p['title']} ...")
-              api.download(p["id"], f"_work/images/${DATASET_NAME}")
+          for feat in data.get("features", []):
+              title = feat["properties"]["title"]
+              link = feat["properties"]["services"]["download"]["url"]
+              print(f"Downloading {title}")
+              out = f"_work/images/${DATASET_NAME}/{title}.zip"
+              with requests.get(link, auth=(USER, PASS), stream=True) as resp:
+                  resp.raise_for_status()
+                  with open(out, "wb") as f:
+                      for chunk in resp.iter_content(chunk_size=8192):
+                          f.write(chunk)
           PYCODE
         env:
           COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
           COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
+
 
 
 
