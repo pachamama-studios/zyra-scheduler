@@ -63,15 +63,16 @@ jobs:
           # For Sentinel-2, use SENTINEL-2 instead of SENTINEL-1
       
           end = datetime.utcnow()
-          start = end - timedelta(days=30)
-          bbox = [10.0, 45.0, 12.0, 47.0]  # Northern Italy
+          start = end - timedelta(days=90)
+          bbox = [11.8, 45.2, 12.6, 45.8]
 
       
           params = {
               "bbox": ",".join(map(str, bbox)),
               "datetime": f"{start.isoformat()}Z/{end.isoformat()}Z",
               "limit": 5,
-              "query": json.dumps({"eo:cloud_cover": {"lt": 20}})
+              # Filter for optical imagery with less than 40 % cloud
+              "query": json.dumps({"eo:cloud_cover": {"lt": 40}})
           }
 
       
