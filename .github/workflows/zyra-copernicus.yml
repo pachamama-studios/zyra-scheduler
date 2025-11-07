@@ -42,8 +42,10 @@ jobs:
               "https://apihub.copernicus.eu/apihub"
           )
       
-          start = (datetime.utcnow() - timedelta(hours=8)).isoformat()
-          end = datetime.utcnow().isoformat()
+          # Use datetime objects
+          end = datetime.utcnow()
+          start = end - timedelta(hours=8)
+      
           footprint = 'POLYGON((-120 35, -118 35, -118 37, -120 37, -120 35))'
       
           products = api.query(
@@ -65,6 +67,7 @@ jobs:
         env:
           COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
           COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
+
 
 
       - name: Upload imagery artifacts
