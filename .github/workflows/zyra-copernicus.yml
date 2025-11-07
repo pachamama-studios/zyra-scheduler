@@ -29,20 +29,18 @@ jobs:
       - name: Install dependencies
         run: pip install --no-cache-dir 'zyra[datatransfer]' requests
       
-      - name: Acquire imagery via Copernicus Data Space (OAuth2 + STAC)
+      - name: Acquire imagery via Copernicus Data Space (OAuth2 + STAC v1)
         run: |
           python3 <<'PYCODE'
           import os, requests, json
           from datetime import datetime, timedelta
       
-          # Load OAuth credentials from secrets
+          # --- Auth variables from GitHub secrets ---
           CLIENT_ID = os.environ["CDSE_CLIENT_ID"]
           CLIENT_SECRET = os.environ["CDSE_CLIENT_SECRET"]
       
-          # OAuth2 token endpoint
+          # --- 1. Get OAuth2 token ---
           TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
-      
-          # Step 1: Request access token
           print("Requesting access token...")
           token_resp = requests.post(
               TOKEN_URL,
@@ -57,29 +55,26 @@ jobs:
           token = token_resp.json()["access_token"]
           headers = {"Authorization": f"Bearer {token}"}
       
-          # Step 2: Query STAC API for Sentinel data
-          STAC_URL = "https://catalogue.dataspace.copernicus.eu/stac/collections/SENTINEL-2/items"
-
-          # For Sentinel-2, use SENTINEL-2 instead of SENTINEL-1
+          # --- 2. Define search parameters ---
+          # Use STAC v1 endpoint
+          STAC_URL = "https://stac.dataspace.copernicus.eu/v1/collections/SENTINEL-2/items"
       
+          # Last 30 days, area over northern Italy (guaranteed data)
           end = datetime.utcnow()
-          start = end - timedelta(days=90)
-          bbox = [11.8, 45.2, 12.6, 45.8]
-
+          start = end - timedelta(days=30)
+          datetime_range = f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
       
+          bbox = [11.8, 45.2, 12.6, 45.8]  # Venice region
           params = {
               "bbox": ",".join(map(str, bbox)),
-              "datetime": f"{start.isoformat()}Z/{end.isoformat()}Z",
-              "limit": 5,
-              # Filter for optical imagery with less than 40 % cloud
-              "query": json.dumps({"eo:cloud_cover": {"lt": 40}})
+              "datetime": datetime_range,
+              "limit": 5
           }
-
       
           print("Querying STAC endpoint...")
           resp = requests.get(STAC_URL, headers=headers, params=params, timeout=120)
           if resp.status_code == 403:
-              print("❌ Forbidden: Check that your client ID/secret has catalogue access.")
+              print("❌ Forbidden: Check your client permissions for Catalogue API.")
               print(resp.text)
               exit(1)
           resp.raise_for_status()
@@ -92,23 +87,30 @@ jobs:
           os.makedirs(outdir, exist_ok=True)
       
           for f in features:
-              title = f["id"]
-              # Find an asset with downloadable data (some STAC items have multiple assets)
-              asset = next(iter(f["assets"].values()))
-              url = asset["href"]
-              print(f"Downloading {title} → {url}")
-              r2 = requests.get(url, headers=headers, stream=True, timeout=300)
-              r2.raise_for_status()
-              with open(os.path.join(outdir, f"{title}.zip"), "wb") as fp:
+              title = f.get("id", "unknown")
+              assets = f.get("assets", {})
+              if not assets:
+                  print(f"⚠️ No downloadable assets for {title}")
+                  continue
+              # Choose the first available asset (often 'data' or 'thumbnail')
+              asset_key = next(iter(assets))
+              url = assets[asset_key]["href"]
+              print(f"⬇️  Downloading {title} ({asset_key})")
+              r2 = requests.get(url, headers=headers, stream=True, timeout=600)
+              if r2.status_code != 200:
+                  print(f"⚠️ Skipping {title}, HTTP {r2.status_code}")
+                  continue
+              dest = os.path.join(outdir, f"{title}.zip")
+              with open(dest, "wb") as fz:
                   for chunk in r2.iter_content(chunk_size=8192):
-                      fp.write(chunk)
-      
+                      fz.write(chunk)
           print("✅ Acquisition complete.")
           PYCODE
         env:
           CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
           CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
           DATASET_NAME: ${{ inputs.DATASET_NAME || 'copernicus' }}
+
 
       - name: Upload imagery artifacts
         uses: actions/upload-artifact@v4
