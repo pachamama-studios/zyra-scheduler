@@ -57,7 +57,7 @@ jobs:
       
           # --- 2. Define search parameters ---
           # Use STAC v1 endpoint
-          STAC_URL = "https://stac.dataspace.copernicus.eu/v1/collections/SENTINEL-2/items"
+          STAC_URL = "https://stac.dataspace.copernicus.eu/v1/collections/Sentinel-2/items"
       
           # Last 30 days, area over northern Italy (guaranteed data)
           end = datetime.utcnow() - timedelta(days=30)
