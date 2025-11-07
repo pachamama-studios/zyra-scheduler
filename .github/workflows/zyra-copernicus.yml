@@ -39,8 +39,9 @@ jobs:
           api = SentinelAPI(
               os.environ["COPERNICUS_USERNAME"],
               os.environ["COPERNICUS_PASSWORD"],
-              "https://apihub.copernicus.eu/apihub"
+              "https://catalogue.dataspace.copernicus.eu"
           )
+
       
           # Use datetime objects
           end = datetime.utcnow()
