@@ -58,18 +58,22 @@ jobs:
           headers = {"Authorization": f"Bearer {token}"}
       
           # Step 2: Query STAC API for Sentinel data
-          STAC_URL = "https://catalogue.dataspace.copernicus.eu/stac/collections/SENTINEL-1/items"
+          STAC_URL = "https://catalogue.dataspace.copernicus.eu/stac/collections/SENTINEL-2/items"
+
           # For Sentinel-2, use SENTINEL-2 instead of SENTINEL-1
       
           end = datetime.utcnow()
-          start = end - timedelta(hours=8)
-          bbox = [-120.0, 35.0, -118.0, 37.0]
+          start = end - timedelta(days=30)
+          bbox = [10.0, 45.0, 12.0, 47.0]  # Northern Italy
+
       
           params = {
               "bbox": ",".join(map(str, bbox)),
               "datetime": f"{start.isoformat()}Z/{end.isoformat()}Z",
-              "limit": 3
+              "limit": 5,
+              "query": json.dumps({"eo:cloud_cover": {"lt": 20}})
           }
+
       
           print("Querying STAC endpoint...")
           resp = requests.get(STAC_URL, headers=headers, params=params, timeout=120)
