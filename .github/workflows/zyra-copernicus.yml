@@ -15,7 +15,7 @@ jobs:
   acquire-copernicus:
     runs-on: ubuntu-latest
     container:
-      image: ${{ env.ZYRA_SCHEDULER_IMAGE }}
+      image: ghcr.io/noaa-gsl/zyra-scheduler:latest
       options: >-
         --entrypoint ""
         --user 0
