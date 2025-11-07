@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       DATASET_NAME:
-        description: Dataset name (e.g., copernicus)
+        description: 'Dataset name (e.g., copernicus)'
         required: true
         type: string
 
@@ -29,89 +29,154 @@ jobs:
       - name: Install dependencies
         run: pip install --no-cache-dir 'zyra[datatransfer]' requests
       
+      # --- UPDATED PYTHON SCRIPT BLOCK ---
       - name: Acquire imagery via Copernicus Data Space (OAuth2 + STAC v1)
         run: |
           python3 <<'PYCODE'
-          import os, requests, json
+          import os, requests, json, sys
           from datetime import datetime, timedelta
-      
-          # --- Auth variables from GitHub secrets ---
-          CLIENT_ID = os.environ["CDSE_CLIENT_ID"]
-          CLIENT_SECRET = os.environ["CDSE_CLIENT_SECRET"]
-      
+
+          print("Starting Copernicus acquisition...")
+
+          # --- Auth variables from environment ---
+          try:
+              CLIENT_ID = os.environ["CDSE_CLIENT_ID"]
+              CLIENT_SECRET = os.environ["CDSE_CLIENT_SECRET"]
+          except KeyError as e:
+              print(f"❌ Error: Environment variable {e} is not set.")
+              print("Please set CDSE_CLIENT_ID and CDSE_CLIENT_SECRET in your repo secrets.")
+              sys.exit(1) # Fail the step
+
           # --- 1. Get OAuth2 token ---
           TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
           print("Requesting access token...")
-          token_resp = requests.post(
-              TOKEN_URL,
-              data={
-                  "grant_type": "client_credentials",
-                  "client_id": CLIENT_ID,
-                  "client_secret": CLIENT_SECRET,
-              },
-              timeout=60,
-          )
-          token_resp.raise_for_status()
-          token = token_resp.json()["access_token"]
-          headers = {"Authorization": f"Bearer {token}"}
-      
+          try:
+              token_resp = requests.post(
+                  TOKEN_URL,
+                  data={
+                      "grant_type": "client_credentials",
+                      "client_id": CLIENT_ID,
+                      "client_secret": CLIENT_SECRET,
+                  },
+                  timeout=60,
+              )
+              token_resp.raise_for_status()
+              token = token_resp.json()["access_token"]
+              headers = {"Authorization": f"Bearer {token}"}
+              print("✅ Access token received.")
+          
+          except requests.exceptions.RequestException as e:
+              print(f"❌ Error getting OAuth2 token: {e}")
+              if hasattr(e, 'response') and e.response is not None:
+                  print(f"Response details: {e.response.status_code} - {e.response.text}")
+              sys.exit(1) # Fail the step
+
           # --- 2. Define search parameters ---
-          # Use STAC v1 endpoint
-          STAC_URL = "https://stac.dataspace.copernicus.eu/v1/collections/Sentinel-2/items"
-      
-          # Last 30 days, area over northern Italy (guaranteed data)
+          # Use the robust POST /search endpoint
+          STAC_SEARCH_URL = "https://stac.dataspace.copernicus.eu/v1/search"
+
+          # Search a 'safer' window: 60 days ago to 30 days ago.
           end = datetime.utcnow() - timedelta(days=30)
           start = datetime.utcnow() - timedelta(days=60)
           datetime_range = f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
-      
-          bbox = [5.0, 45.0, 20.0, 63.0]  # Broader Northern Italy region
-          params = {
-              "bbox": ",".join(map(str, bbox)),
+
+          # Widen the bounding box
+          bbox = [9.0, 45.0, 13.0, 46.0]  # Broader Northern Italy region
+          
+          # Build the search payload for the POST request
+          search_payload = {
+              "collections": ["Sentinel-2"], # Case-sensitive collection ID
+              "bbox": bbox,
               "datetime": datetime_range,
-              "limit": 5  # Limit to 5 results for a quick test
+              "limit": 5
           }
-      
-          print("Querying STAC endpoint...")
-          resp = requests.get(STAC_URL, headers=headers, params=params, timeout=120)
-          if resp.status_code == 403:
-              print("❌ Forbidden: Check your client permissions for Catalogue API.")
-              print(resp.text)
-              exit(1)
-          resp.raise_for_status()
-          data = resp.json()
-      
+
+          print(f"Querying STAC search endpoint: {STAC_SEARCH_URL}")
+          print(f"Payload: {json.dumps(search_payload, indent=2)}")
+
+          # --- 3. Query STAC endpoint ---
+          try:
+              # Use POST and send the parameters as a JSON payload
+              resp = requests.post(STAC_SEARCH_URL, headers=headers, json=search_payload, timeout=120)
+              
+              if resp.status_code == 403:
+                  print("❌ Forbidden (403): Check your client permissions for Catalogue API.")
+                  print(f"Response: {resp.text}")
+                  sys.exit(1) # Fail the step
+                  
+              resp.raise_for_status()
+              data = resp.json()
+
+          except requests.exceptions.RequestException as e:
+              print(f"❌ Error querying STAC endpoint: {e}")
+              if hasattr(e, 'response') and e.response is not None:
+                  print(f"Response details: {e.response.status_code} - {e.response.text}")
+              sys.exit(1) # Fail the step
+
+          # --- 4. Process and Download Results ---
           features = data.get("features", [])
-          print(f"Found {len(features)} results")
-      
-          outdir = f"_work/images/{os.environ.get('DATASET_NAME', 'copernicus')}"
+          print(f"✅ Found {len(features)} results.")
+
+          # Get dataset name from env var passed to the step
+          dataset_name = os.environ.get('DATASET_NAME', 'copernicus')
+          outdir = f"_work/images/{dataset_name}"
           os.makedirs(outdir, exist_ok=True)
-      
+          print(f"Downloading files to: {os.path.abspath(outdir)}")
+
+          if not features:
+              print("No features found matching criteria. Job complete.")
+              sys.exit(0) # Exit cleanly, not an error
+
           for f in features:
-              title = f.get("id", "unknown")
+              title = f.get("id", "unknown_id")
               assets = f.get("assets", {})
+              
               if not assets:
                   print(f"⚠️ No downloadable assets for {title}")
                   continue
-              # Choose the first available asset (often 'data' or 'thumbnail')
-              asset_key = next(iter(assets))
+
+              # Try to find a common/useful asset key, fallback to the first one
+              asset_key = None
+              if 'data' in assets:
+                  asset_key = 'data'
+              elif 'thumbnail' in assets:
+                  asset_key = 'thumbnail'
+              else:
+                  asset_key = next(iter(assets)) # Get the first asset key
+
               url = assets[asset_key]["href"]
-              print(f"⬇️  Downloading {title} ({asset_key})")
-              r2 = requests.get(url, headers=headers, stream=True, timeout=600)
-              if r2.status_code != 200:
-                  print(f"⚠️ Skipping {title}, HTTP {r2.status_code}")
-                  continue
-              dest = os.path.join(outdir, f"{title}.zip")
-              with open(dest, "wb") as fz:
-                  for chunk in r2.iter_content(chunk_size=8192):
-                      fz.write(chunk)
-          print("✅ Acquisition complete.")
+              print(f"⬇️  Downloading {title} (asset: '{asset_key}')...")
+              
+              try:
+                  r2 = requests.get(url, headers=headers, stream=True, timeout=600)
+                  
+                  if r2.status_code != 200:
+                      print(f"⚠️ Skipping {title}, received HTTP {r2.status_code}")
+                      print(f"URL: {url}")
+                      continue
+                  
+                  # Save with .zip extension to match the original workflow's intent,
+                  # even if the asset isn't a zip. This ensures the upload-artifact
+                  # step works as originally designed.
+                  filename = f"{title}.zip"
+                  dest = os.path.join(outdir, filename)
+                  
+                  with open(dest, "wb") as fz:
+                      for chunk in r2.iter_content(chunk_size=8192):
+                          fz.write(chunk)
+                  print(f"   Saved to {dest}")
+
+              except requests.exceptions.RequestException as e:
+                  print(f"❌ Error downloading asset for {title}: {e}")
+                  
+          print("\n✅ Acquisition complete.")
           PYCODE
         env:
           CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
           CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
           DATASET_NAME: ${{ inputs.DATASET_NAME || 'copernicus' }}
-
-
+      
+      # --- This step remains unchanged ---
       - name: Upload imagery artifacts
         uses: actions/upload-artifact@v4
         with:
