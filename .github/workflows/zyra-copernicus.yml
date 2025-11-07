@@ -29,16 +29,18 @@ jobs:
       - name: Install Copernicus connector (temporary)
         run: pip install 'zyra[datatransfer]' sentinelsat
 
-      - name: Acquire imagery from Copernicus
+      - name: Acquire imagery from Copernicus (temporary)
         run: |
-          zyra acquire copernicus \
-            --dataset "Sentinel-2" \
-            --bbox "-120,35,-118,37" \
-            --start-date "2025-11-01" \
-            --end-date "2025-11-07" \
-            --output-dir "_work/images/${DATASET_NAME}" \
-            --username "${COPERNICUS_USERNAME}" \
-            --password "${COPERNICUS_PASSWORD}"
+          mkdir -p "_work/images/${DATASET_NAME}"
+          sentinelsat \
+            --user "${COPERNICUS_USERNAME}" \
+            --password "${COPERNICUS_PASSWORD}" \
+            --sentinel 2 \
+            --area "POLYGON((-120 35, -118 35, -118 37, -120 37, -120 35))" \
+            --query "beginPosition:[2025-11-01T00:00:00Z TO 2025-11-07T23:59:59Z]" \
+            --limit 5 \
+            --download "_work/images/${DATASET_NAME}"
+
 
       - name: Upload imagery artifacts
         uses: actions/upload-artifact@v4
