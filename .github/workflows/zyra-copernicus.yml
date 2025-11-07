@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Copernicus connector (temporary)
-        run: pip install 'zyra[datatransfer] copernicus-api-client'
+        run: pip install 'zyra[datatransfer]' copernicus-api-client
 
       - name: Acquire imagery from Copernicus
         run: |
