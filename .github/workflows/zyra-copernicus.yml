@@ -84,24 +84,27 @@ jobs:
           print(f"Searching 1-year window: {datetime_range}")
 
           # Widen the bounding box
-          bbox = [9.0, 45.0, 25.0, 65.0]  # Broader Northern Italy region
+          bbox = [9.0, 45.0, 13.0, 46.0]  # Broader Northern Italy region
           
           # Build the search payload for the POST request
           search_payload = {
-              # --- CHANGE HERE ---
-              # Query the specific L2A (Level-2A) collection, not the parent.
               "collections": ["Sentinel-2-L2A"], 
-              # -----------------
               "bbox": bbox,
               "datetime": datetime_range,
               "limit": 5,
-              # --- ADD THIS 'query' BLOCK ---
-              # Explicitly ask for images with less than 90% cloud cover.
-              # This is a common reason for "0 results" on optical sensors.
-              "query": {
-                  "eo:cloud_cover": {
-                      "lt": 90
-                  }
+              
+              # --- SYNTAX CHANGE ---
+              # Replace the simple "query" block with the
+              # STAC API Filter Extension syntax ("cql2-json").
+              # This is the more robust, standard-compliant way
+              # to filter by cloud cover and may be required by the API.
+              "filter-lang": "cql2-json",
+              "filter": {
+                  "op": "<=",
+                  "args": [
+                      { "property": "eo:cloud_cover" },
+                      90
+                  ]
               }
               # -----------------------------
           }
