@@ -363,7 +363,10 @@ jobs:
             echo "VIMEO_URI=${VIMEO_URI-}"
             echo "S3_URL=${S3_URL-}"
           } >> "$GITHUB_ENV"
-
+          
+      - name: Install Zyra Vimeo connector
+        run: pip install --no-cache-dir 'zyra[datatransfer]'
+        
       - name: Upload video to Vimeo
         run: |
           zyra ${ZYRA_CLI_VERBOSE_FLAG:-} decimate vimeo \
