@@ -64,7 +64,7 @@ jobs:
           start = datetime.utcnow() - timedelta(days=60)
           datetime_range = f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
       
-          bbox = [9.0, 45.0, 13.0, 46.0]  # Broader Northern Italy region
+          bbox = [5.0, 45.0, 20.0, 63.0]  # Broader Northern Italy region
           params = {
               "bbox": ",".join(map(str, bbox)),
               "datetime": datetime_range,
