@@ -1,8 +1,8 @@
 name: Dataset (clouds)
 
 on:
-  # schedule:
-  #   - cron: '10 6 * * *'  # disabled; manual runs only
+  schedule:
+    - cron: '10 6 * * *'  # runs daily at 06:10 UTC
   workflow_dispatch: {}
 
 jobs:
