@@ -40,10 +40,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies (Dataspace + Zyra)
+      - name: Install dependencies (EUMETSAT Dataspace + Zyra)
         run: |
           pip install --no-cache-dir 'zyra[datatransfer]'
-          pip install --no-cache-dir eumdac-dataspace
+          pip install git+https://gitlab.eumetsat.int/eumdac/eumdac-dataspace.git
+
 
       - name: Acquire Meteosat imagery (Dataspace API)
         run: |
