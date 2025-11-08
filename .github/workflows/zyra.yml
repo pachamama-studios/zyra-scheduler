@@ -146,7 +146,6 @@ jobs:
             --since-period "${SINCE_PERIOD}" \
             --pattern "${PATTERN}" \
             --date-format "${DATE_FORMAT}" \
-            --max-files 300
           rc=$?
           set -e
           if [[ $rc -ne 0 ]]; then
