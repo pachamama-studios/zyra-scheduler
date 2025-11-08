@@ -85,6 +85,16 @@ jobs:
 
           print("✅ All available products processed.")
           PYCODE
+          
+      - name: Extract imagery frames
+        run: |
+          echo "📦 Extracting downloaded EUMETSAT products..."
+          find "_work/images/${{ inputs.DATASET_NAME }}" -type f -name "*.zip" | while read zf; do
+            echo "🗜️  Unzipping $zf"
+            unzip -o "$zf" -d "_work/images/${{ inputs.DATASET_NAME }}/frames"
+          done
+          echo "✅ Extraction complete."
+
 
       - name: Upload acquire artifacts
         uses: actions/upload-artifact@v4
