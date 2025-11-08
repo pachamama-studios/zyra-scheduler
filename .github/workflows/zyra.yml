@@ -114,7 +114,7 @@ jobs:
           echo "DATA_ROOT=${GITHUB_WORKSPACE}/_work" >> "$GITHUB_ENV"
           echo "FRAMES_DIR=${GITHUB_WORKSPACE}/_work/images/${DATASET_NAME}" >> "$GITHUB_ENV"
           echo "OUTPUT_DIR=${GITHUB_WORKSPACE}/_work/output" >> "$GITHUB_ENV"
-          echo "OUTPUT_PATH=${GITHUB_WORKSPACE}/_work/output/${DATASET_NAME}.mp4" >> "$GITHUB_ENV"
+          echo "OUTPUT_PATH=_work/output/${DATASET_NAME}.mp4" >> "$GITHUB_ENV"
           mkdir -p "${GITHUB_WORKSPACE}/_work/images/${DATASET_NAME}" "${GITHUB_WORKSPACE}/_work/output"
 
           # Persist dataset env to later steps in this job
