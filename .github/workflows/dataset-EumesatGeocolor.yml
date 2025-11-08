@@ -27,7 +27,6 @@ jobs:
       options: >-
         --entrypoint ""
         --user 0
-
     env:
       DATASET_NAME: "${{ inputs.DATASET_NAME }}"
       EUMETSAT_API_KEY: ${{ secrets.EUMETSAT_API_KEY }}
@@ -37,7 +36,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies (EUMDAC + Zyra)
-        run: pip install --no-cache-dir 'zyra[datatransfer]' eumdac
+        run: |
+          pip install --no-cache-dir 'zyra[datatransfer]'
+          pip install --no-cache-dir eumdac
 
       - name: Acquire one Meteosat product from EUMETSAT
         run: |
@@ -48,43 +49,49 @@ jobs:
           consumer_key = os.environ["EUMETSAT_API_KEY"]
           consumer_secret = os.environ["EUMETSAT_API_SECRET"]
 
+          # Force token refresh (call twice)
           token = eumdac.AccessToken((consumer_key, consumer_secret))
-          token = eumdac.AccessToken((consumer_key, consumer_secret))  # force re-request
-
+          token = eumdac.AccessToken((consumer_key, consumer_secret))
           print("✅ Authenticated with EUMETSAT API")
 
           datastore = eumdac.DataStore(token)
           collection_id = "EO:EUM:DAT:MSG:HRSEVIRI"
           collection = datastore.get_collection(collection_id)
 
-          # Search for data from the last 6 hours
+          # Search for products from the last 6 hours
           end = datetime.utcnow()
           start = end - timedelta(hours=6)
           products = list(collection.search(dtstart=start, dtend=end))
-
           if not products:
               print("⚠️ No SEVIRI products found in last 6 hours.")
               exit(0)
 
           print(f"Found {len(products)} products in the last 6 hours.")
 
-          # Output directory setup
+          # Output directory
           dataset_name = os.environ.get("DATASET_NAME", "eumetsat")
           output_dir = f"_work/images/{dataset_name}"
           os.makedirs(output_dir, exist_ok=True)
 
-          # Download only the first (most recent) product
+          # Download only first (latest) product
           product = products[0]
           print(f"📦 Product _id: {product._id}")
+          dest = os.path.join(output_dir, f"{product._id}.zip")
+
           try:
-              dest = os.path.join(output_dir, f"{product._id}.zip")
-              print(f"⬇️  Downloading {product._id} → {dest}")
+              print(f"⬇️ Downloading {product._id} → {dest}")
               with product.open() as src, open(dest, "wb") as dst:
                   dst.write(src.read())
               print(f"✅ Saved {product._id}")
           except Exception as e:
-              print(f"⚠️ Download failed for {product._id}: {e}")
-              exit(1)
+              print(f"⚠️ Download failed: {e}")
+              print("🔁 Retrying with new token...")
+              token = eumdac.AccessToken((consumer_key, consumer_secret))
+              datastore = eumdac.DataStore(token)
+              retry_product = datastore.get_product(product._id)
+              with retry_product.open() as src, open(dest, "wb") as dst:
+                  dst.write(src.read())
+              print(f"✅ Retried and saved {product._id}")
 
           print("✅ Acquisition complete.")
           PYCODE
@@ -97,7 +104,7 @@ jobs:
           echo "📦 Extracting downloaded EUMETSAT product..."
           mkdir -p "_work/images/${{ inputs.DATASET_NAME }}/frames"
           find "_work/images/${{ inputs.DATASET_NAME }}" -type f -name "*.zip" | while read zf; do
-            echo "🗜️  Unzipping $zf"
+            echo "🗜️ Unzipping $zf"
             unzip -q -o "$zf" -d "_work/images/${{ inputs.DATASET_NAME }}/frames"
           done
           echo "🧭 Listing extracted files:"
@@ -178,6 +185,7 @@ jobs:
           zyra visualize compose-video \
             --frames "_work/images/${{ inputs.DATASET_NAME }}/flat" \
             --output "_work/output/${{ inputs.DATASET_NAME }}.mp4"
+          echo "✅ Composition complete."
 
       - name: Upload video artifact
         if: success() || always()
@@ -206,11 +214,21 @@ jobs:
       - name: Ensure Zyra Vimeo connector installed
         run: pip install --no-cache-dir 'zyra[datatransfer]'
 
-      - name: Restore video
+      - name: Check for video artifact before download
+        run: |
+          echo "🔍 Checking if video artifact exists..."
+          if ! gh api repos/${{ github.repository }}/actions/artifacts | grep -q "video-${{ inputs.DATASET_NAME }}"; then
+            echo "⚠️ No video artifact found; skipping Vimeo upload."
+            exit 0
+          fi
+
+      - name: Restore video (if exists)
+        if: always()
         uses: actions/download-artifact@v4
         with:
           name: video-${{ inputs.DATASET_NAME }}
           path: _work/output
+          continue-on-error: true
 
       - name: Upload to Vimeo
         run: |
@@ -218,6 +236,8 @@ jobs:
             echo "⚠️ No MP4 file found; skipping Vimeo upload."
             exit 0
           fi
+          echo "🎥 Uploading to Vimeo..."
           zyra decimate vimeo \
             --input "_work/output/${{ inputs.DATASET_NAME }}.mp4" \
             --replace-uri ${VIMEO_URI:-/videos/your-video-id}
+          echo "✅ Uploaded to Vimeo."
