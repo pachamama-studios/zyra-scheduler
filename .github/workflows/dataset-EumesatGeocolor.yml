@@ -55,7 +55,7 @@ jobs:
           print("✅ Authenticated with EUMETSAT API")
 
           datastore = eumdac.DataStore(token)
-          collection_id = "EO:EUM:DAT:MSG:IRSEVIRI"
+          collection_id = "EO:EUM:DAT:METOP:ASCAT-A-25"
           collection = datastore.get_collection(collection_id)
 
           # Search for products from the last 6 hours
