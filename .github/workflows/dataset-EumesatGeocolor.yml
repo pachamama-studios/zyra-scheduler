@@ -72,7 +72,7 @@ jobs:
           os.makedirs(output_dir, exist_ok=True)
 
           # Download up to 10 most recent frames
-          for product in products[:10]:
+          for product in products[:1]:
               print(f"📦 Product _id: {product._id}")
               try:
                   dest = os.path.join(output_dir, f"{product._id}.zip")
@@ -85,18 +85,21 @@ jobs:
 
           print("✅ All available products processed.")
           PYCODE
+          
       - name: Install unzip utility
         run: apt-get update && apt-get install -y unzip
-    
+
       - name: Extract imagery frames
         run: |
-          echo "📦 Extracting downloaded EUMETSAT products..."
+          echo "📦 Extracting downloaded EUMETSAT product..."
+          mkdir -p "_work/images/${{ inputs.DATASET_NAME }}/frames"
           find "_work/images/${{ inputs.DATASET_NAME }}" -type f -name "*.zip" | while read zf; do
             echo "🗜️  Unzipping $zf"
-            unzip -o "$zf" -d "_work/images/${{ inputs.DATASET_NAME }}/frames"
+            unzip -q -o "$zf" -d "_work/images/${{ inputs.DATASET_NAME }}/frames"
           done
+          echo "🧭 Listing extracted files:"
+          find "_work/images/${{ inputs.DATASET_NAME }}/frames" -type f | head -20
           echo "✅ Extraction complete."
-
 
       - name: Upload acquire artifacts
         uses: actions/upload-artifact@v4
@@ -153,12 +156,19 @@ jobs:
           name: acquire-${{ inputs.DATASET_NAME }}
           path: _work/images/${{ inputs.DATASET_NAME }}
 
+      - name: Flatten frame directory for Zyra
+        run: |
+          mkdir -p "_work/images/${{ inputs.DATASET_NAME }}/flat"
+          find "_work/images/${{ inputs.DATASET_NAME }}/frames" -type f \( -iname "*.png" -o -iname "*.jpg" \) \
+            -exec cp {} "_work/images/${{ inputs.DATASET_NAME }}/flat/" \;
+
       - name: Compose animation
         run: |
           mkdir -p _work/output
           zyra visualize compose-video \
-            --frames "_work/images/${{ inputs.DATASET_NAME }}/frames" \
+            --frames "_work/images/${{ inputs.DATASET_NAME }}/flat" \
             --output "_work/output/${{ inputs.DATASET_NAME }}.mp4"
+
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
