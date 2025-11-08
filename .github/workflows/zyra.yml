@@ -373,7 +373,7 @@ jobs:
         
       - name: Upload video to Vimeo
         run: |
-          zyra ${ZYRA_CLI_VERBOSE_FLAG:-} decimate vimeo \
+          zyra ${ZYRA_CLI_VERBOSE_FLAG:-} export vimeo \
             --input "${OUTPUT_PATH}" \
             --replace-uri ${VIMEO_URI}
 
@@ -450,7 +450,7 @@ jobs:
             --dataset-id ${DATASET_ID} \
             --meta "${FRAMES_DIR}/metadata/frames-meta.json" \
             --vimeo-uri ${VIMEO_URI} \
-            --output - | zyra ${ZYRA_CLI_VERBOSE_FLAG:-} decimate s3 \
+            --output - | zyra ${ZYRA_CLI_VERBOSE_FLAG:-} export s3 \
             --read-stdin \
             --url ${S3_URL}
 
