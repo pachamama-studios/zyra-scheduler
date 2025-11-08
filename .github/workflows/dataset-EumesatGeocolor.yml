@@ -48,7 +48,10 @@ jobs:
           consumer_key = os.environ["EUMETSAT_API_KEY"]
           consumer_secret = os.environ["EUMETSAT_API_SECRET"]
 
-          token = eumdac.AccessToken((consumer_key, consumer_secret))
+          token = eumdac.AccessToken(
+              (consumer_key, consumer_secret),
+              force_new=True  # <- ensure full new token from auth server
+          )
           print("✅ Authenticated with EUMETSAT API")
 
           datastore = eumdac.DataStore(token)
