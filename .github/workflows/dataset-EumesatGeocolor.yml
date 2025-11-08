@@ -46,9 +46,6 @@ jobs:
           pip install --no-cache-dir 'zyra[datatransfer]'
           pip install git+https://gitlab.eumetsat.int/open-source-public/eumdac-dataspace.git
 
-
-
-
       - name: Acquire Meteosat imagery (Dataspace API)
         run: |
           python3 <<'PYCODE'
