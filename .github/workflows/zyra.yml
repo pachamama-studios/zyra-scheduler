@@ -82,6 +82,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Ensure Zyra Vimeo connector is installed
+        run: pip install --no-cache-dir 'zyra[datatransfer]'
 
       - name: Prepare paths and load dataset env
         id: prep
