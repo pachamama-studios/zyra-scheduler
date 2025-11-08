@@ -51,29 +51,33 @@ jobs:
 
           datastore = eumdac.DataStore(token)
 
-          # Meteosat-11 SEVIRI (HR Visible) product
+          # Meteosat-11 SEVIRI (HR Visible)
           collection_id = "EO:EUM:DAT:MSG:HRSEVIRI"
           collection = datastore.get_collection(collection_id)
 
-          # Last 6 hours of data
+          # Search for the last 6 hours of data
           end = datetime.utcnow()
           start = end - timedelta(hours=6)
           products = list(collection.search(dtstart=start, dtend=end))
 
           if not products:
-              print("⚠️ No SEVIRI products found in last 6h.")
+              print("⚠️ No SEVIRI products found in last 6 hours.")
               exit(0)
 
           latest = products[0]
-          os.makedirs(f"_work/images/${{ inputs.DATASET_NAME }}", exist_ok=True)
-          dest = f"_work/images/${{ inputs.DATASET_NAME }}/{latest.filename}"
+          print(f"📦 Found product: {latest.name}")
 
-          print(f"⬇️  Downloading {latest.filename} ...")
+          output_dir = f"_work/images/${{ inputs.DATASET_NAME }}"
+          os.makedirs(output_dir, exist_ok=True)
+          dest = os.path.join(output_dir, f"{latest.name}.zip")
+
+          print(f"⬇️  Downloading {latest.name} ...")
           with latest.open() as src, open(dest, "wb") as dst:
               dst.write(src.read())
 
-          print(f"✅ Downloaded {latest.filename}")
+          print(f"✅ Downloaded {latest.name} → {dest}")
           PYCODE
+
 
       - name: Upload acquire artifacts
         uses: actions/upload-artifact@v4
