@@ -155,7 +155,7 @@ jobs:
         run: |
           mkdir -p _work/output
           zyra visualize compose-video \
-            --frames "_work/images/${{ inputs.DATASET_NAME }}" \
+            --frames "_work/images/${{ inputs.DATASET_NAME }}/frames" \
             --output "_work/output/${{ inputs.DATASET_NAME }}.mp4"
 
       - name: Upload video artifact
