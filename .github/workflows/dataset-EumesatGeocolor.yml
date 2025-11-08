@@ -42,9 +42,10 @@ jobs:
 
       - name: Install dependencies (EUMETSAT Dataspace + Zyra)
         run: |
-          apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+          apt-get update && apt-get install -y git
           pip install --no-cache-dir 'zyra[datatransfer]'
-          pip install git+https://gitlab.eumetsat.int/eumdac/eumdac-dataspace.git
+          pip install git+https://gitlab.eumetsat.int/open-source-public/eumdac-dataspace.git
+
 
 
 
