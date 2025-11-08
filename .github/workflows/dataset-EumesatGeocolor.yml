@@ -88,7 +88,7 @@ jobs:
               print("🔁 Retrying with new token...")
               token = eumdac.AccessToken((consumer_key, consumer_secret))
               datastore = eumdac.DataStore(token)
-              retry_product = datastore.get_product(product._id)
+              retry_product = datastore.get_product(collection_id, product._id)
               with retry_product.open() as src, open(dest, "wb") as dst:
                   dst.write(src.read())
               print(f"✅ Retried and saved {product._id}")
