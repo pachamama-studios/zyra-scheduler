@@ -55,7 +55,7 @@ jobs:
           collection_id = "EO:EUM:DAT:MSG:HRSEVIRI"
           collection = datastore.get_collection(collection_id)
 
-          # Look back 6 hours
+          # Search for the last 6 hours of data
           end = datetime.utcnow()
           start = end - timedelta(hours=6)
           products = list(collection.search(dtstart=start, dtend=end))
@@ -64,20 +64,26 @@ jobs:
               print("⚠️ No SEVIRI products found in last 6 hours.")
               exit(0)
 
-          print(f"Found {len(products)} products.")
-          latest = products[0]
-          print(f"📦 Found product ID: {latest.id}")
-          print("Available attributes:", dir(latest))
+          print(f"Found {len(products)} products in the last 6 hours.")
 
-          output_dir = f"_work/images/{os.environ.get('DATASET_NAME', 'eumetsat')}"
+          # Output directory setup
+          dataset_name = os.environ.get("DATASET_NAME", "eumetsat")
+          output_dir = f"_work/images/{dataset_name}"
           os.makedirs(output_dir, exist_ok=True)
-          dest = os.path.join(output_dir, f"{latest.id}.zip")
 
-          print(f"⬇️  Downloading {latest.id} ...")
-          with latest.open() as src, open(dest, "wb") as dst:
-              dst.write(src.read())
+          # Download up to 10 most recent frames
+          for product in products[:10]:
+              print(f"📦 Product _id: {product._id}")
+              try:
+                  dest = os.path.join(output_dir, f"{product._id}.zip")
+                  print(f"⬇️  Downloading {product._id} → {dest}")
+                  with product.open() as src, open(dest, "wb") as dst:
+                      dst.write(src.read())
+                  print(f"✅ Saved {product._id}")
+              except Exception as e:
+                  print(f"⚠️ Skipped {product._id}: {e}")
 
-          print(f"✅ Downloaded {latest.id} → {dest}")
+          print("✅ All available products processed.")
           PYCODE
 
       - name: Upload acquire artifacts
