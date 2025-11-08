@@ -1,4 +1,4 @@
-name: Zyra EUMETSAT Geostationary Pipeline
+name: Zyra EUMETSAT Geostationary Pipeline (Dataspace API)
 
 on:
   workflow_dispatch:
@@ -19,6 +19,10 @@ env:
   ZYRA_VERBOSITY: "${{ inputs.ZYRA_VERBOSITY }}"
 
 jobs:
+
+  ############################################
+  # 1. Acquire latest Meteosat imagery
+  ############################################
   acquire-eumetsat:
     name: Acquire Geostationary Imagery
     runs-on: ubuntu-latest
@@ -27,73 +31,58 @@ jobs:
       options: >-
         --entrypoint ""
         --user 0
+
     env:
       DATASET_NAME: "${{ inputs.DATASET_NAME }}"
-      EUMETSAT_API_KEY: ${{ secrets.EUMETSAT_API_KEY }}
-      EUMETSAT_API_SECRET: ${{ secrets.EUMETSAT_API_SECRET }}
+      EUMETSAT_USERNAME: ${{ secrets.EUMETSAT_USERNAME }}
+      EUMETSAT_PASSWORD: ${{ secrets.EUMETSAT_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies (EUMDAC + Zyra)
+      - name: Install dependencies (Dataspace + Zyra)
         run: |
           pip install --no-cache-dir 'zyra[datatransfer]'
-          pip install --no-cache-dir eumdac
+          pip install --no-cache-dir eumdac-dataspace
 
-      - name: Acquire one Meteosat product from EUMETSAT
+      - name: Acquire Meteosat imagery (Dataspace API)
         run: |
           python3 <<'PYCODE'
-          import eumdac, os
+          import os
           from datetime import datetime, timedelta
+          from eumdac_dataspace import DataStore
 
-          consumer_key = os.environ["EUMETSAT_API_KEY"]
-          consumer_secret = os.environ["EUMETSAT_API_SECRET"]
+          username = os.environ["EUMETSAT_USERNAME"]
+          password = os.environ["EUMETSAT_PASSWORD"]
 
-          # Force token refresh (call twice)
-          token = eumdac.AccessToken((consumer_key, consumer_secret))
-          token = eumdac.AccessToken((consumer_key, consumer_secret))
-          print("✅ Authenticated with EUMETSAT API")
+          datastore = DataStore(username, password)
+          print("✅ Authenticated with EUMETSAT Dataspace API")
 
-          datastore = eumdac.DataStore(token)
-          collection_id = "EO:EUM:DAT:METOP:ASCAT-A-25"
+          collection_id = "EO:EUM:DAT:MSG:HRSEVIRI"
           collection = datastore.get_collection(collection_id)
 
-          # Search for products from the last 6 hours
+          # Search the last 6 hours of data
           end = datetime.utcnow()
           start = end - timedelta(hours=6)
           products = list(collection.search(dtstart=start, dtend=end))
+
           if not products:
               print("⚠️ No SEVIRI products found in last 6 hours.")
               exit(0)
 
           print(f"Found {len(products)} products in the last 6 hours.")
+          product = products[0]
+          print(f"📦 Product ID: {product.identifier}")
 
-          # Output directory
           dataset_name = os.environ.get("DATASET_NAME", "eumetsat")
           output_dir = f"_work/images/{dataset_name}"
           os.makedirs(output_dir, exist_ok=True)
+          dest = os.path.join(output_dir, f"{product.identifier}.zip")
 
-          # Download only first (latest) product
-          product = products[0]
-          print(f"📦 Product _id: {product._id}")
-          dest = os.path.join(output_dir, f"{product._id}.zip")
-
-          try:
-              print(f"⬇️ Downloading {product._id} → {dest}")
-              with product.open() as src, open(dest, "wb") as dst:
-                  dst.write(src.read())
-              print(f"✅ Saved {product._id}")
-          except Exception as e:
-              print(f"⚠️ Download failed: {e}")
-              print("🔁 Retrying with new token...")
-              token = eumdac.AccessToken((consumer_key, consumer_secret))
-              datastore = eumdac.DataStore(token)
-              retry_product = datastore.get_product(collection_id, product._id)
-              with retry_product.open() as src, open(dest, "wb") as dst:
-                  dst.write(src.read())
-              print(f"✅ Retried and saved {product._id}")
-
-          print("✅ Acquisition complete.")
+          print(f"⬇️ Downloading → {dest}")
+          with product.open() as src, open(dest, "wb") as dst:
+              dst.write(src.read())
+          print(f"✅ Download complete: {dest}")
           PYCODE
 
       - name: Install unzip utility
@@ -104,7 +93,7 @@ jobs:
           echo "📦 Extracting downloaded EUMETSAT product..."
           mkdir -p "_work/images/${{ inputs.DATASET_NAME }}/frames"
           find "_work/images/${{ inputs.DATASET_NAME }}" -type f -name "*.zip" | while read zf; do
-            echo "🗜️ Unzipping $zf"
+            echo "🗜️  Unzipping $zf"
             unzip -q -o "$zf" -d "_work/images/${{ inputs.DATASET_NAME }}/frames"
           done
           echo "🧭 Listing extracted files:"
@@ -118,6 +107,10 @@ jobs:
           path: _work/images/${{ inputs.DATASET_NAME }}
           retention-days: 7
 
+
+  ############################################
+  # 2. Validate imagery frames
+  ############################################
   validate-frames:
     name: Validate imagery
     runs-on: ubuntu-latest
@@ -127,6 +120,7 @@ jobs:
       options: >-
         --entrypoint ""
         --user 0
+
     steps:
       - uses: actions/checkout@v4
 
@@ -148,6 +142,10 @@ jobs:
           name: metadata-${{ inputs.DATASET_NAME }}
           path: _work/images/${{ inputs.DATASET_NAME }}/metadata.json
 
+
+  ############################################
+  # 3. Compose animation from frames
+  ############################################
   compose-video:
     name: Compose video
     runs-on: ubuntu-latest
@@ -157,6 +155,7 @@ jobs:
       options: >-
         --entrypoint ""
         --user 0
+
     steps:
       - uses: actions/checkout@v4
 
@@ -185,7 +184,6 @@ jobs:
           zyra visualize compose-video \
             --frames "_work/images/${{ inputs.DATASET_NAME }}/flat" \
             --output "_work/output/${{ inputs.DATASET_NAME }}.mp4"
-          echo "✅ Composition complete."
 
       - name: Upload video artifact
         if: success() || always()
@@ -195,6 +193,10 @@ jobs:
           path: _work/output/${{ inputs.DATASET_NAME }}.mp4
           retention-days: 7
 
+
+  ############################################
+  # 4. Upload to Vimeo
+  ############################################
   upload-vimeo:
     name: Upload to Vimeo
     runs-on: ubuntu-latest
@@ -204,26 +206,19 @@ jobs:
       options: >-
         --entrypoint ""
         --user 0
+
     env:
       VIMEO_CLIENT_ID: ${{ secrets.VIMEO_CLIENT_ID }}
       VIMEO_CLIENT_SECRET: ${{ secrets.VIMEO_CLIENT_SECRET }}
       VIMEO_ACCESS_TOKEN: ${{ secrets.VIMEO_ACCESS_TOKEN }}
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Ensure Zyra Vimeo connector installed
         run: pip install --no-cache-dir 'zyra[datatransfer]'
 
-      - name: Check for video artifact before download
-        run: |
-          echo "🔍 Checking if video artifact exists..."
-          if ! gh api repos/${{ github.repository }}/actions/artifacts | grep -q "video-${{ inputs.DATASET_NAME }}"; then
-            echo "⚠️ No video artifact found; skipping Vimeo upload."
-            exit 0
-          fi
-
-      - name: Restore video (if exists)
-        if: always()
+      - name: Restore video
         uses: actions/download-artifact@v4
         with:
           name: video-${{ inputs.DATASET_NAME }}
@@ -236,8 +231,6 @@ jobs:
             echo "⚠️ No MP4 file found; skipping Vimeo upload."
             exit 0
           fi
-          echo "🎥 Uploading to Vimeo..."
           zyra decimate vimeo \
             --input "_work/output/${{ inputs.DATASET_NAME }}.mp4" \
             --replace-uri ${VIMEO_URI:-/videos/your-video-id}
-          echo "✅ Uploaded to Vimeo."
