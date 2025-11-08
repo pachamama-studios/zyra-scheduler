@@ -1,7 +1,7 @@
 name: Zyra EUMETSAT Geostationary Pipeline
 
 on:
-   workflow_dispatch:
+  workflow_dispatch:
     inputs:
       DATASET_NAME:
         description: "Dataset name (e.g., eumetsat)"
@@ -29,8 +29,10 @@ jobs:
         --user 0
 
     env:
+      DATASET_NAME: "${{ inputs.DATASET_NAME }}"
       EUMETSAT_API_KEY: ${{ secrets.EUMETSAT_API_KEY }}
       EUMETSAT_API_SECRET: ${{ secrets.EUMETSAT_API_SECRET }}
+
     steps:
       - uses: actions/checkout@v4
 
