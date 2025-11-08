@@ -58,7 +58,7 @@ jobs:
           # Last 6 hours of data
           end = datetime.utcnow()
           start = end - timedelta(hours=6)
-          products = list(collection.search(start=start, end=end))
+          products = list(collection.search(dtstart=start, dtend=end))
 
           if not products:
               print("⚠️ No SEVIRI products found in last 6h.")
