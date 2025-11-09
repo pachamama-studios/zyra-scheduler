@@ -1,0 +1,94 @@
+name: Download Global Geostationary Images
+
+on:
+  schedule:
+    # This cron job runs every 6 hours (at minute 0 past every 6th hour).
+    # You can adjust this frequency:
+    #   - '0 0 * * *' : once a day at midnight UTC
+    #   - '0 * * * *' : every hour
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allows you to manually trigger the workflow from GitHub UI
+
+jobs:
+  download_satellite_images:
+    runs-on: ubuntu-latest # Uses a fresh Ubuntu environment for each run
+
+    steps:
+      - name: Checkout Zyra repository
+        # Since Zyra is an external tool, you'll need to clone it.
+        # We'll clone it into a subdirectory.
+        uses: actions/checkout@v4
+        with:
+          repository: NOAA-GSL/zyra
+          path: zyra_repo # Clones Zyra into a directory named 'zyra_repo'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Use the latest available Python 3 version
+
+      - name: Install Zyra dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install dependencies listed in Zyra's requirements.txt
+          pip install -r zyra_repo/requirements.txt
+        working-directory: zyra_repo # Run this command from within the cloned Zyra directory
+
+      - name: Create output directory for images
+        run: mkdir -p images
+
+      # --- Download Images for Each Satellite ---
+      # Each download step includes 'continue-on-error: true' so that if one satellite fails,
+      # the others can still attempt to download.
+
+      - name: Download GOES-16 Full Disk (Americas/Atlantic - Visible Channel)
+        run: |
+          python zyra_repo/zyra.py \
+            --satellite goes-16 \
+            --instrument abi \
+            --channel Band2_RedVisible \
+            --resolution full \
+            --latest \
+            --output-dir images/goes-16
+        continue-on-error: true
+
+      - name: Download GOES-18 Full Disk (Pacific/Western Americas - Visible Channel)
+        run: |
+          python zyra_repo/zyra.py \
+            --satellite goes-18 \
+            --instrument abi \
+            --channel Band2_RedVisible \
+            --resolution full \
+            --latest \
+            --output-dir images/goes-18
+        continue-on-error: true
+
+      - name: Download Meteosat-11 Full Disk (Europe/Africa - High Resolution Visible)
+        run: |
+          python zyra_repo/zyra.py \
+            --satellite meteosat-11 \
+            --instrument seviri \
+            --channel HRV \
+            --resolution full \
+            --latest \
+            --output-dir images/meteosat-11
+        continue-on-error: true
+
+      - name: Download Himawari-8 Full Disk (Asia/Pacific - Visible Channel)
+        run: |
+          python zyra_repo/zyra.py \
+            --satellite himawari-8 \
+            --instrument ahi \
+            --channel Band3_Visible \
+            --resolution full \
+            --latest \
+            --output-dir images/himawari-8
+        continue-on-error: true
+
+      # --- Upload Images as an Artifact ---
+      - name: Upload downloaded images as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: global-satellite-images-${{ github.run_id }} # Unique name for each artifact
+          path: images/ # The directory containing all downloaded images
+          retention-days: 7 # How long to keep the artifact (default is 90 days, but good to specify)
