@@ -30,8 +30,8 @@ jobs:
       - name: Install Zyra dependencies
         run: |
           python -m pip install --upgrade pip
-          # Install dependencies listed in Zyra's requirements.txt
-          pip install -r requirements.txt # <--- CORRECTED LINE HERE
+          # Install Zyra package itself, which will also install its dependencies
+          pip install . # <--- CORRECTED LINE HERE
         working-directory: zyra_repo
 
       - name: Create output directory for images
